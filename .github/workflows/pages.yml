@@ -38,6 +38,13 @@ jobs:
           fi
           cat build.log
           cp site/prip_map.html site/index.html
+          # карта сайта для Яндекс Вебмастера и Google Search Console
+          cat > site/sitemap.xml <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+            <url><loc>https://kubiqq.github.io/PRIP/</loc><lastmod>$(date -u +%Y-%m-%dT%H:%M:%S+00:00)</lastmod><changefreq>hourly</changefreq></url>
+          </urlset>
+          EOF
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

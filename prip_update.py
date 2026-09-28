@@ -356,6 +356,18 @@ def write_kml(feats, path):
                     encoding="utf-8")
 
 
+def static_list(notices, cats):
+    """Список ПРИП прямо в HTML: его видят поисковики и браузеры без JavaScript.
+    Скрипт страницы при загрузке заменяет его интерактивным списком."""
+    color = {c["key"]: c["color"] for c in cats}
+    rows = []
+    for n in notices:
+        title = re.sub(r"^ПРИП \S+ \d+/\d+\s*", "", n["title"])
+        rows.append(f'<div class="item"><span class="sw" style="background:{color.get(n["category"], "#7f7f7f")}">'
+                    f'</span> <b>{html.escape(n["id"])}</b><div class="t">{html.escape(title)}</div></div>')
+    return "\n".join(rows)
+
+
 def leaflet_tags():
     """Leaflet встраивается в страницу целиком, чтобы карта не зависела от доступности CDN."""
     vendor = Path(__file__).resolve().parent / "vendor"
@@ -436,6 +448,9 @@ def run(out_dir=OUT):
     data = json.dumps({"geo": geo, "notices": notices, "cats": cats, "problems": problems, "author": author},
                       ensure_ascii=False).replace("</", "<\\/")
     tpl = tpl.replace("<!--__LEAFLET__-->", leaflet_tags())
+    tpl = tpl.replace("<!--__STATIC_LIST__-->", static_list(notices, cats))
+    seo = Path(__file__).resolve().parent / "seo_meta.html"   # коды подтверждения Яндекс Вебмастера / Google
+    tpl = tpl.replace("<!--__VERIFY__-->", seo.read_text(encoding="utf-8").strip() if seo.exists() else "")
     (out_dir / "prip_map.html").write_text(tpl.replace("/*__DATA__*/null", data), encoding="utf-8")
     return {"updated": now, "notices": notices, "features": feats, "valid": valid, "problems": problems,
             "out_dir": out_dir}
