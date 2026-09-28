@@ -1,0 +1,17 @@
+﻿# Свойства exe (Свойства → Подробно) для PyInstaller --version-file
+VSVersionInfo(
+  ffi=FixedFileInfo(filevers=(1, 2, 0, 0), prodvers=(1, 2, 0, 0), mask=0x3f, flags=0x0,
+                    OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+  kids=[
+    StringFileInfo([StringTable('041904B0', [
+      StringStruct('CompanyName', 'Смирнов В.В.'),
+      StringStruct('FileDescription', 'ПРИП-Синхро: действующие ПРИП для TimeZero'),
+      StringStruct('FileVersion', '1.2'),
+      StringStruct('InternalName', 'PRIP-Sync'),
+      StringStruct('LegalCopyright', '© Смирнов В.В., smirnov.ecology@yandex.ru'),
+      StringStruct('OriginalFilename', 'PRIP-Sync.exe'),
+      StringStruct('ProductName', 'ПРИП-Синхро'),
+      StringStruct('ProductVersion', '1.2')])]),
+    VarFileInfo([VarStruct('Translation', [1049, 1200])])
+  ]
+)

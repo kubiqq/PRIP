@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ПРИП Белое, Баренцево, Печорское</title>
+<!--__LEAFLET__-->
+<style>
+  .leaflet-control-layers-toggle { background-image:none !important; display:flex !important; align-items:center; justify-content:center; font-size:20px; color:#333; }
+  .leaflet-control-layers-toggle::after { content:"🗺"; }
+  #toast { position:absolute; z-index:1000; left:50%; top:10px; transform:translateX(-50%); background:#333; color:#fff; padding:6px 12px; border-radius:6px; font-size:12px; display:none; }
+  :root { --bg:#fff; --fg:#1b1f24; --muted:#5b6570; --line:#dde2e7; --hl:#eef4fb; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16191d; --fg:#e6e9ec; --muted:#9aa4ae; --line:#2c3238; --hl:#1f2a36; } }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui, sans-serif; }
+  #app { display:flex; height:100%; }
+  #side { width:380px; display:flex; flex-direction:column; border-right:1px solid var(--line); }
+  #map { flex:1; }
+  header { padding:12px 14px; border-bottom:1px solid var(--line); }
+  h1 { font-size:16px; margin:0 0 4px; }
+  .meta { color:var(--muted); font-size:12px; }
+  .ctrl { padding:8px 14px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:6px; }
+  input[type=search] { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); }
+  .chips { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:12px; }
+  .chips label { display:flex; align-items:center; gap:4px; cursor:pointer; }
+  .sw { width:10px; height:10px; border-radius:2px; display:inline-block; }
+  #list { overflow:auto; flex:1; }
+  .item { padding:8px 14px; border-bottom:1px solid var(--line); cursor:pointer; }
+  .item:hover, .item.sel { background:var(--hl); }
+  .item b { font-size:13px; }
+  .item .t { color:var(--muted); font-size:12px; }
+  .item .nogeo { color:#c0392b; font-size:11px; }
+  .warn { background:#fff3cd; color:#664d03; padding:6px 14px; font-size:12px; }
+  pre { white-space:pre-wrap; font-size:12px; margin:6px 0 0; max-height:280px; overflow:auto; }
+  .leaflet-popup-content { margin:10px 12px; }
+  @media (max-width:760px) { #app { flex-direction:column-reverse; } #side { width:100%; height:45%; border-right:0; border-top:1px solid var(--line);} }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <header>
+      <h1>ПРИП — Белое, Баренцево и Печорское море</h1>
+      <div class="meta" id="meta"></div>
+      <div class="meta">Скачать: <a href="prip_timezero.gpx" download>GPX для TimeZero</a> ·
+        <a href="prip.gpx" download>GPX</a> · <a href="prip.kml" download>KML</a> ·
+        <a href="prip.geojson" download>GeoJSON</a></div>
+      <div class="meta" id="author"></div>
+    </header>
+    <div id="warn"></div>
+    <div class="ctrl">
+      <input type="search" id="q" placeholder="Поиск: номер, район, текст…">
+      <div class="chips" id="cats"></div>
+      <div class="chips" id="srcs"></div>
+    </div>
+    <div id="list"></div>
+  </aside>
+  <div id="map"><div id="toast"></div></div>
+</div>
+<script>
+const DATA = /*__DATA__*/null;
+const now = new Date();
+const catColor = Object.fromEntries(DATA.cats.map(c => [c.key, c.color]));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = iso => new Date(iso).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone:'Europe/Moscow'});
+
+document.getElementById('meta').innerHTML =
+  `Обновлено: ${fmt(DATA.geo.properties.updated)} МСК · действующих: ${DATA.notices.length}<br>` +
+  Object.values(DATA.geo.properties.headers).map(esc).join('<br>');
+const A = DATA.author;
+document.getElementById('author').innerHTML =
+  `Автор: ${esc(A.name)}, ${esc(A.org)}, <a href="mailto:${esc(A.email)}">${esc(A.email)}</a>`;
+if (DATA.problems.length) document.getElementById('warn').innerHTML =
+  DATA.problems.map(p => `<div class="warn">⚠ ${esc(p)}</div>`).join('');
+
+// Подложки. Яндекс использует эллипсоидальную проекцию EPSG:3395 — при переключении меняем CRS карты.
+const Y = L.CRS.EPSG3395, M = L.CRS.EPSG3857;
+const BASES = [
+  ['Esri Ocean (морская)', 'https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {maxNativeZoom:13, attribution:'© Esri, GEBCO, NOAA'}, M],
+  ['Esri спутник', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxNativeZoom:17, attribution:'© Esri'}, M],
+  ['Яндекс схема', 'https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&scale=1&lang=ru_RU', {attribution:'© Яндекс'}, Y],
+  ['Яндекс спутник', 'https://sat0{s}.maps.yandex.net/tiles?l=sat&x={x}&y={y}&z={z}', {subdomains:'1234', attribution:'© Яндекс'}, Y],
+  ['2ГИС', 'https://tile{s}.maps.2gis.com/tiles?x={x}&y={y}&z={z}', {subdomains:'0123', attribution:'© 2ГИС'}, M],
+  ['OpenStreetMap', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap'}, M],
+].map(([name, url, opt, crs]) => { const l = L.tileLayer(url, {maxZoom:18, ...opt}); l.crs = crs; l.title = name; return l; });
+
+const store = {get:k => { try { return localStorage.getItem(k); } catch(e) { return null; } },
+               set:(k, v) => { try { localStorage.setItem(k, v); } catch(e) {} }};
+let current = BASES.find(b => b.title === store.get('prip-base')) || BASES[0];
+const map = L.map('map', {crs: current.crs}).setView([68.5, 44], 5);
+current.addTo(map);
+const seamark = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {maxZoom:18, attribution:'© OpenSeaMap'});
+seamark.crs = M;
+if (current.crs === M) seamark.addTo(map);
+const layerCtl = L.control.layers(Object.fromEntries(BASES.map(b => [b.title, b])), {'Морские знаки OpenSeaMap': seamark}).addTo(map);
+L.control.scale({imperial:false}).addTo(map);
+
+function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = 'none', 5000); }
+
+map.on('baselayerchange', e => applyBase(e.layer));
+function applyBase(layer, auto) {
+  const prev = current; current = layer; if (!auto) store.set('prip-base', current.title);
+  if (prev.crs !== current.crs) {            // смена проекции: пересчитать вид и перерисовать векторные слои
+    const c = map.getCenter(), z = map.getZoom();
+    map.options.crs = current.crs; map._resetView(c, z, true);
+    Object.values(layers).forEach(l => { if (map.hasLayer(l)) { map.removeLayer(l); l.addTo(map); } });
+  }
+  // OpenSeaMap в проекции Web Mercator — поверх Яндекса легла бы со сдвигом, поэтому отключаем
+  if (current.crs === Y && map.hasLayer(seamark)) { map.removeLayer(seamark); toast('Морские знаки OpenSeaMap недоступны на подложке Яндекса'); }
+  watch(current);
+}
+map.on('overlayadd', e => { if (e.layer === seamark && current.crs === Y) { map.removeLayer(seamark); toast('Морские знаки OpenSeaMap несовместимы с проекцией Яндекса'); } });
+
+// Автопереключение: если подложка не отдала ни одного тайла за 15 с — берём следующую
+function watch(layer) {
+  let ok = 0, fail = 0;
+  const onLoad = () => ok++, onErr = () => fail++;
+  layer.on('tileload', onLoad).on('tileerror', onErr);
+  setTimeout(() => {
+    layer.off('tileload', onLoad).off('tileerror', onErr);
+    if (layer !== current || ok > 0) return;
+    const next = BASES[(BASES.indexOf(layer) + 1) % BASES.length];
+    if (next === BASES[0] && layer !== BASES[0]) { toast('Ни одна подложка не отвечает — проверьте интернет'); return; }
+    toast(`«${layer.title}» не загружается — переключаю на «${next.title}»`);
+    map.removeLayer(layer); next.addTo(map); applyBase(next, true);
+  }, 15000);
+}
+watch(current);
+
+const layers = {};   // id -> L.featureGroup
+DATA.geo.features.forEach(f => {
+  const p = f.properties, color = catColor[p.category];
+  const expired = p.cancel && new Date(p.cancel) < now;
+  const style = {color, weight:2, fillOpacity:.18, dashArray: (p.kind.includes("упрощ") || p.kind.includes("между берегом")) || expired ? '6 4' : null};
+  const lyr = L.geoJSON(f, {style, pointToLayer: (_, ll) => L.circleMarker(ll, {radius:6, color, weight:2, fillOpacity:.7})});
+  lyr.bindPopup(`<b>${esc(p.id)}</b><br><span style="color:#666">${esc(p.kind)}${p.label ? ' · ' + esc(p.label) : ''}</span>` +
+    (p.cancel ? `<br>Отмена: ${fmt(p.cancel)} МСК${expired ? ' (срок истёк)' : ''}` : '') +
+    `<pre>${esc(p.text)}</pre>`, {maxWidth:420});
+  (layers[p.id] ||= L.featureGroup()).addLayer(lyr);
+});
+
+const state = {q:'', cats:new Set(DATA.cats.map(c => c.key)), srcs:new Set(DATA.notices.map(n => n.source))};
+document.getElementById('cats').innerHTML = DATA.cats.map(c =>
+  `<label><input type="checkbox" data-cat="${c.key}" checked><span class="sw" style="background:${c.color}"></span>${c.label}</label>`).join('');
+document.getElementById('srcs').innerHTML = [...state.srcs].map(s =>
+  `<label><input type="checkbox" data-src="${esc(s)}" checked>ПРИП ${esc(s)}${s === 'Запад' ? ' (Печорское море)' : ''}</label>`).join('');
+document.querySelectorAll('[data-cat],[data-src]').forEach(cb => cb.onchange = () => {
+  const set = cb.dataset.cat ? state.cats : state.srcs, key = cb.dataset.cat || cb.dataset.src;
+  cb.checked ? set.add(key) : set.delete(key); render();
+});
+document.getElementById('q').oninput = e => { state.q = e.target.value.toUpperCase().trim(); render(); };
+
+function render() {
+  const list = document.getElementById('list'); list.innerHTML = '';
+  DATA.notices.forEach(n => {
+    const show = state.cats.has(n.category) && state.srcs.has(n.source) &&
+      (!state.q || (n.title + ' ' + n.text).toUpperCase().includes(state.q));
+    const lg = layers[n.id];
+    if (lg) show ? lg.addTo(map) : map.removeLayer(lg);
+    if (!show) return;
+    const el = document.createElement('div'); el.className = 'item';
+    el.innerHTML = `<span class="sw" style="background:${catColor[n.category]}"></span> <b>${esc(n.id)}</b>` +
+      `<div class="t">${esc(n.title.replace(/^ПРИП \S+ \d+\/\d+\s*/, ''))}</div>` +
+      (n.cancel ? `<div class="t">до ${fmt(n.cancel)} МСК</div>` : '') +
+      (n.cancelled_points && n.cancelled_points.length ? `<div class="t">пункт(ы) ${n.cancelled_points.join(', ')} отменены другим ПРИП — на карте не показаны</div>` : '') +
+      (lg ? '' : '<div class="nogeo">без координат — только текст</div>');
+    el.onclick = () => {
+      document.querySelectorAll('.item.sel').forEach(x => x.classList.remove('sel')); el.classList.add('sel');
+      if (lg) { map.fitBounds(lg.getBounds(), {maxZoom:11, padding:[30,30]}); lg.getLayers()[0].openPopup(); }
+      else L.popup({maxWidth:420}).setLatLng(map.getCenter()).setContent(`<b>${esc(n.id)}</b><pre>${esc(n.text)}</pre>`).openOn(map);
+    };
+    list.appendChild(el);
+  });
+}
+render();
+</script>
+</body>
+</html>

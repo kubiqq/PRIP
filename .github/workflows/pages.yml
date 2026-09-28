@@ -1,0 +1,47 @@
+# Каждые 3 часа загружает действующие ПРИП с mapm.ru и публикует карту и файлы на GitHub Pages.
+# Если mapm.ru не ответил, публикация не происходит — на сайте остаётся предыдущая версия
+# (дата обновления видна в шапке карты).
+name: Карта ПРИП
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"   # UTC: 00:17, 03:17, … (МСК +3)
+  workflow_dispatch:          # ручной запуск: Actions → «Карта ПРИП» → Run workflow
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Загрузка ПРИП и сборка карты
+        run: |
+          python prip_update.py site
+          cp site/prip_map.html site/index.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
