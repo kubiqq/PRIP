@@ -19,6 +19,7 @@ import html
 import json
 import math
 import re
+import ssl
 import sys
 import urllib.request
 from html.parser import HTMLParser
@@ -72,9 +73,19 @@ OTHER = ("other", "Прочее", "#7f7f7f")
 
 # ---------- загрузка и разбор HTML ----------
 
+def ssl_context():
+    """Стандартные корневые сертификаты + корневой сертификат Минцифры (Russian Trusted Root CA).
+    Сертификат mapm.ru выдан УЦ Минцифры, которого нет в стандартных хранилищах Linux и многих Windows."""
+    ctx = ssl.create_default_context()
+    ca = Path(__file__).resolve().parent / "vendor" / "russian_trusted_root_ca.pem"
+    if ca.exists():
+        ctx.load_verify_locations(cafile=str(ca))
+    return ctx
+
+
 def fetch(url):
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (prip-update)"})
-    with urllib.request.urlopen(req, timeout=25) as r:
+    with urllib.request.urlopen(req, timeout=25, context=ssl_context()) as r:
         return r.read().decode("utf-8", errors="replace")
 
 

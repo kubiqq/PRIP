@@ -60,4 +60,4 @@ smirnov.ecology@yandex.ru
 
 ## Лицензия
 
-[GNU GPL v3](LICENSE). В `vendor/` — библиотека [Leaflet](https://leafletjs.com) (BSD-2-Clause).
+[GNU GPL v3](LICENSE). В `vendor/` — библиотека [Leaflet](https://leafletjs.com) (BSD-2-Clause) и корневой сертификат Минцифры `russian_trusted_root_ca.pem` (с [gu-st.ru](https://www.gosuslugi.ru/crt)): им подписан сертификат mapm.ru, а в стандартных хранилищах его нет.
