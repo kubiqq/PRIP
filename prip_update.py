@@ -21,6 +21,7 @@ import math
 import re
 import ssl
 import sys
+import time
 import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
@@ -83,10 +84,17 @@ def ssl_context():
     return ctx
 
 
-def fetch(url):
+def fetch(url, attempts=3):
+    """mapm.ru иногда отвечает очень медленно — до 3 попыток с паузой."""
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (prip-update)"})
-    with urllib.request.urlopen(req, timeout=25, context=ssl_context()) as r:
-        return r.read().decode("utf-8", errors="replace")
+    for i in range(attempts):
+        try:
+            with urllib.request.urlopen(req, timeout=25, context=ssl_context()) as r:
+                return r.read().decode("utf-8", errors="replace")
+        except (OSError, TimeoutError):  # URLError и таймауты — наследники OSError
+            if i == attempts - 1:
+                raise
+            time.sleep(5 * (i + 1))
 
 
 class PripPage(HTMLParser):

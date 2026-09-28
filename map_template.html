@@ -46,6 +46,9 @@
         <a href="prip.gpx" download>GPX</a> · <a href="prip.kml" download>KML</a> ·
         <a href="prip.geojson" download>GeoJSON</a></div>
       <div class="meta" id="author"></div>
+      <div class="meta" id="privacy" hidden>Для подсчёта посещений используется Яндекс Метрика: она сохраняет
+        cookies и получает технические данные (IP-адрес, браузер, устройство). Продолжая пользоваться картой,
+        вы соглашаетесь с этим.</div>
     </header>
     <div id="warn"></div>
     <div class="ctrl">
@@ -173,6 +176,18 @@ function render() {
   });
 }
 render();
+</script>
+<script>
+// Яндекс Метрика — только на опубликованном сайте. Локальная карта (ПРИП-Синхро на судне) ничего не отправляет.
+if (location.hostname.endsWith('github.io')) {
+  (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+  m[i].l=1*new Date();
+  for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+  k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+  (window, document, "script", "https://mc.yandex.ru/metrika/tag.js?id=113127841", "ym");
+  ym(113127841, "init", {clickmap:true, trackLinks:true, accurateTrackBounce:true});
+  document.getElementById('privacy').hidden = false;
+}
 </script>
 </body>
 </html>

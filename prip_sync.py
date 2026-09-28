@@ -61,6 +61,10 @@ class App(tk.Tk):
         self.result = None       # данные последней синхронизации (или кэш)
         self.new_ids, self.gone_ids = [], []
         self._build()
+        cache = self._load_cache()       # сразу показываем последние данные, пока идёт синхронизация
+        if cache:
+            self.result = cache
+            self._diff_and_fill()
         self.after(100, self.sync)
 
     # ---------- интерфейс ----------
@@ -142,7 +146,8 @@ class App(tk.Tk):
         if getattr(self, "_busy", False):
             return
         self._busy = True
-        self.status.config(text="Синхронизация с mapm.ru…", fg="black")
+        shown = f" (пока показаны данные от {fmt(self.result['updated'])} МСК)" if self.result else ""
+        self.status.config(text=f"Синхронизация с mapm.ru…{shown}", fg="black")
         box = queue.Queue()
         threading.Thread(target=self._sync_worker, args=(box,), daemon=True).start()
         self._poll(box)
