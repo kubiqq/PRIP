@@ -129,20 +129,24 @@ def compute_periods(arch, now):
     for nid, r in recs.items():
         groups.setdefault((r["source"], r["year"]), []).append(r)
     for rs in groups.values():
-        upper = now
+        upper, from_neighbor = now, False
         for r in sorted(rs, key=lambda r: -r["num"]):
             year_end = dt.datetime(r["year"], 12, 31, 23, 59, tzinfo=pu.MSK)   # ПРИП прошлых лет
             upper = min(upper, parse(r["first_seen"]), year_end)
             t, exact = issued_guess(r["text"], r["year"], upper)
-            r["start_year_only"] = t is None       # подписи с датой нет — известен только год из номера
+            if t is None and from_neighbor:
+                t = upper   # подпись без даты («1830 МСК»): выпущен не позже следующего по номеру ПРИП
+            r["start_year_only"] = t is None       # ни подписи, ни соседей — известен только год из номера
             if t is None:
                 t = dt.datetime(r["year"], 1, 1, tzinfo=pu.MSK)
             r["start"], r["start_exact"] = iso(t), exact
             if not r["start_year_only"]:
-                upper = t
+                upper, from_neighbor = t, True
     # 2. кем отменён
     cancelled_by = {}
     for nid, r in recs.items():
+        if r.get("start_year_only"):
+            continue   # дата выпуска неизвестна — как момент отмены других ПРИП не годится
         for num, year in full_cancels(r["text"]):
             target = f"ПРИП {r['source'].upper()} {num}/{str(year)[2:]}"
             t = parse(r.get("start")) or parse(r["first_seen"])
@@ -166,6 +170,8 @@ def compute_periods(arch, now):
             cands.append((explicit, "срок в тексте ПРИП"))
         if nid in cancelled_by:
             cands.append((cancelled_by[nid][1], f"отменён {cancelled_by[nid][0]}"))
+        if start:
+            cands = [c for c in cands if c[0] >= start]   # отмена не может быть раньше выпуска
         gone = parse(r.get("gone_seen"))
         if gone:
             cands = [c for c in cands if c[0] <= gone] or [(gone, "снят со списка действующих")]
