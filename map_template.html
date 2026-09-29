@@ -85,7 +85,7 @@ document.getElementById('meta').innerHTML =
   Object.values(DATA.geo.properties.headers).map(esc).join('<br>');
 const A = DATA.author;
 document.getElementById('author').innerHTML =
-  `Автор: ${esc(A.name)}, ${esc(A.org)}, <a href="mailto:${esc(A.email)}">${esc(A.email)}</a>`;
+  `Автор: ${esc(A.name)}${A.org ? ', ' + esc(A.org) : ''}, <a href="mailto:${esc(A.email)}">${esc(A.email)}</a>`;
 if (DATA.problems.length) document.getElementById('warn').innerHTML =
   DATA.problems.map(p => `<div class="warn">⚠ ${esc(p)}</div>`).join('');
 

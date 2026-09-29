@@ -29,7 +29,7 @@ jobs:
           python-version: "3.12"
       - name: Загрузка ПРИП и сборка карты
         run: |
-          if ! python prip_update.py site > build.log 2>&1; then
+          if ! python prip_update.py site --site > build.log 2>&1; then
             cat build.log
             # текст ошибки — в аннотацию, её видно на странице запуска без входа в аккаунт
             echo "::error title=Сборка карты не удалась::$(tail -n 3 build.log | tr '\n' ' ')"

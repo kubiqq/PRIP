@@ -46,10 +46,23 @@ OUT = Path(__file__).resolve().parent / "out"
 AUTHOR = "Смирнов В.В."
 AUTHOR_ORG = ""
 AUTHOR_EMAIL = "smirnov.ecology@yandex.ru"
-_user, _domain = AUTHOR_EMAIL.split("@")
-GPX_META = (f"<metadata><name>ПРИП Белое, Баренцево и Печорское море</name>"
-            f"<desc>{escape(AUTHOR_ORG)}</desc><author><name>{escape(AUTHOR)}</name>"
-            f'<email id="{_user}" domain="{_domain}"/></author></metadata>\n')
+SITE_AUTHOR_EMAIL = "smirnov.ecology@yandex.ru"   # подпись на сайте — без организации, с этой почтой
+
+
+def author_info(public=False):
+    """(имя, организация, почта): для сайта (public) — без организации и с почтой сайта."""
+    return (AUTHOR, "", SITE_AUTHOR_EMAIL) if public else (AUTHOR, AUTHOR_ORG, AUTHOR_EMAIL)
+
+
+_author = author_info()  # подпись для текущей сборки; run() переключает её для сайта
+
+
+def gpx_meta():
+    name, org, email = _author
+    user, domain = email.split("@")
+    desc = f"<desc>{escape(org)}</desc>" if org else ""
+    return (f"<metadata><name>ПРИП Белое, Баренцево и Печорское море</name>{desc}"
+            f'<author><name>{escape(name)}</name><email id="{user}" domain="{domain}"/></author></metadata>\n')
 MSK = dt.timezone(dt.timedelta(hours=3))
 
 MONTHS = {"ЯНВ": 1, "ФЕВ": 2, "МАР": 3, "АПР": 4, "МАЙ": 5, "МАЯ": 5, "ИЮН": 6, "ИЮЛ": 7,
@@ -325,7 +338,7 @@ def write_gpx(feats, path):
             trks.append(f"<trk><name>{name}</name><desc>{desc}</desc><trkseg>{seg}</trkseg></trk>")
     path.write_text('<?xml version="1.0" encoding="UTF-8"?>\n'
                     '<gpx version="1.1" creator="prip_update" xmlns="http://www.topografix.com/GPX/1/1">\n'
-                    + GPX_META
+                    + gpx_meta()
                     + "\n".join(wpts + trks) + "\n</gpx>\n", encoding="utf-8")
 
 
@@ -352,7 +365,7 @@ def write_kml(feats, path):
                    f"<description><![CDATA[<pre>{html.escape(p['text'])}</pre>]]></description>{geo}</Placemark>")
     path.write_text('<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document>'
                     f"<name>ПРИП Белое, Баренцево и Печорское море</name>"
-                    f"<description>{escape(f'{AUTHOR}, {AUTHOR_ORG}, {AUTHOR_EMAIL}')}</description>{styles}{''.join(pms)}</Document></kml>\n",
+                    f"<description>{escape(', '.join(x for x in _author if x))}</description>{styles}{''.join(pms)}</Document></kml>\n",
                     encoding="utf-8")
 
 
@@ -420,12 +433,15 @@ def write_gpx_timezero(feats, path):
     path.write_text('<?xml version="1.0" encoding="UTF-8"?>\n'
                     '<gpx version="1.1" creator="PRIP-Sync" xmlns="http://www.topografix.com/GPX/1/1" '
                     'xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3">\n'
-                    + GPX_META
+                    + gpx_meta()
                     + "\n".join(wpts + trks) + "\n</gpx>\n", encoding="utf-8")
 
 
-def run(out_dir=OUT):
-    """Загружает действующие ПРИП и пишет все файлы в out_dir. Возвращает сводку."""
+def run(out_dir=OUT, public=False):
+    """Загружает действующие ПРИП и пишет все файлы в out_dir. Возвращает сводку.
+    public=True — сборка для сайта (подпись без организации, почта сайта)."""
+    global _author
+    _author = author_info(public)
     out_dir = Path(out_dir)
     notices, valid, problems = collect()
     feats = build_features(notices)
@@ -444,7 +460,8 @@ def run(out_dir=OUT):
     cats = [{"key": k, "label": l, "color": c} for k, l, c, _ in CATEGORIES] + \
            [{"key": OTHER[0], "label": OTHER[1], "color": OTHER[2]}]
     tpl = (Path(__file__).resolve().parent / "map_template.html").read_text(encoding="utf-8")
-    author = {"name": AUTHOR, "org": AUTHOR_ORG, "email": AUTHOR_EMAIL}
+    name, org, email = _author
+    author = {"name": name, "org": org, "email": email}
     data = json.dumps({"geo": geo, "notices": notices, "cats": cats, "problems": problems, "author": author},
                       ensure_ascii=False).replace("</", "<\\/")
     tpl = tpl.replace("<!--__LEAFLET__-->", leaflet_tags())
@@ -457,7 +474,9 @@ def run(out_dir=OUT):
 
 
 def main():
-    r = run(sys.argv[1] if len(sys.argv) > 1 else OUT)  # python prip_update.py [папка]
+    # python prip_update.py [папка] [--site]   (--site — сборка для сайта)
+    args = [a for a in sys.argv[1:] if a != "--site"]
+    r = run(args[0] if args else OUT, public="--site" in sys.argv)
     notices, valid = r["notices"], r["valid"]
     no_geo = [n["id"] for n in notices if not n["features"]]
     print(f"{r['updated']}: действующих ПРИП {len(notices)}, объектов на карте {len(r['features'])}")
