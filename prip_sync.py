@@ -5,8 +5,7 @@ TimeZero не имеет API для внешних программ, поэто�
   prip_timezero_new.gpx  — только новые с момента последнего «Изменения внесены в TimeZero»
 Отменённые ПРИП приложение перечисляет по именам, чтобы их удалили в TimeZero вручную.
 
-Автор: Смирнов В.В., ,
-smirnov.ecology@yandex.ru
+Автор: Смирнов В.В., smirnov.ecology@yandex.ru
 """
 import datetime as dt
 import json
@@ -23,7 +22,7 @@ from tkinter import filedialog, messagebox, ttk
 import prip_update as pu
 
 APP = "ПРИП-Синхро"
-VERSION = "1.2"
+VERSION = "1.3"
 DATA = Path(os.environ.get("USERPROFILE", Path.home())) / "Documents" / "PRIP-Sync"
 STATE = DATA / "state.json"
 STALE_HOURS = 24
@@ -101,7 +100,7 @@ class App(tk.Tk):
 
         footer = ttk.Frame(self, padding=(10, 0, 10, 6))
         footer.pack(side="bottom", fill="x")
-        tk.Label(footer, text=f"Автор: {pu.AUTHOR}, {pu.AUTHOR_ORG}", fg="#666",
+        tk.Label(footer, text=f"Автор: {pu.AUTHOR},", fg="#666",
                  font=("Segoe UI", 9)).pack(side="left")
         mail = tk.Label(footer, text=pu.AUTHOR_EMAIL, fg="#1a5fb4", cursor="hand2",
                         font=("Segoe UI", 9, "underline"))
@@ -264,7 +263,7 @@ class App(tk.Tk):
         messagebox.showinfo(f"О программе {APP}", f"{APP} {VERSION}\n"
                             "Действующие ПРИП Белого, Баренцева и Печорского морей для TimeZero.\n"
                             "Источник: mapm.ru (ФГБУ «АМП Западной Арктики»).\n\n"
-                            f"Автор: {pu.AUTHOR}\n{pu.AUTHOR_ORG}\n{pu.AUTHOR_EMAIL}")
+                            f"Автор: {pu.AUTHOR}\n{pu.AUTHOR_EMAIL}")
 
     def acknowledge(self):
         if not self.result:

@@ -55,8 +55,7 @@ python -m PyInstaller --onefile --windowed --name PRIP-Sync --version-file versi
 
 ## Автор
 
-Смирнов В.В., ,
-smirnov.ecology@yandex.ru
+Смирнов В.В., smirnov.ecology@yandex.ru
 
 ## Лицензия
 
