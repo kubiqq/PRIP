@@ -1,4 +1,5 @@
-# Каждый час загружает действующие ПРИП с mapm.ru и публикует карту и файлы на GitHub Pages.
+# Каждый час загружает действующие ПРИП с mapm.ru, дописывает архив и публикует карту и файлы на GitHub Pages.
+# Архив (prip_archive.json) хранится в отдельной ветке archive-data — при сбоях он не теряется.
 # Если mapm.ru не ответил, публикация не происходит — на сайте остаётся предыдущая версия
 # (дата обновления видна в шапке карты).
 name: Карта ПРИП
@@ -11,7 +12,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write             # запись архива в ветку archive-data
   pages: write
   id-token: write
 
@@ -27,9 +28,17 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Загрузка ПРИП и сборка карты
+      - name: Архив — ветка archive-data
         run: |
-          if ! python prip_update.py site > build.log 2>&1; then
+          if git ls-remote --exit-code --heads origin archive-data > /dev/null; then
+            git fetch --depth=1 origin archive-data
+            git worktree add archive-data FETCH_HEAD
+          else
+            git worktree add --orphan -b archive-data archive-data
+          fi
+      - name: Загрузка ПРИП, архив и сборка карты
+        run: |
+          if ! python prip_archive.py site archive-data/prip_archive.json > build.log 2>&1; then
             cat build.log
             # текст ошибки — в аннотацию, её видно на странице запуска без входа в аккаунт
             echo "::error title=Сборка карты не удалась::$(tail -n 3 build.log | tr '\n' ' ')"
@@ -43,8 +52,20 @@ jobs:
           <?xml version="1.0" encoding="UTF-8"?>
           <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
             <url><loc>https://kubiqq.github.io/PRIP/</loc><lastmod>$(date -u +%Y-%m-%dT%H:%M:%S+00:00)</lastmod><changefreq>hourly</changefreq></url>
+            <url><loc>https://kubiqq.github.io/PRIP/archive.html</loc><lastmod>$(date -u +%Y-%m-%dT%H:%M:%S+00:00)</lastmod><changefreq>daily</changefreq></url>
           </urlset>
           EOF
+      - name: Сохранение архива
+        run: |
+          cd archive-data
+          git add prip_archive.json
+          if git diff --cached --quiet; then
+            echo "Архив не изменился"
+          else
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "Архив ПРИП: $(date -u +%Y-%m-%d\ %H:%M) UTC"
+            git push origin HEAD:archive-data
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -247,6 +247,29 @@ def geometries(text, skip=()):
 
 # ---------- сборка ----------
 
+def page_notices(src, page, keep, valid=None, problems=None):
+    """ПРИП со страницы mapm.ru -> (notices, found). valid — {год: {номера}} действующих или None (брать все)."""
+    notices, found = [], set()
+    for it in page.items:
+        m = re.search(r"(\d+)\s*/\s*(\d{2})", it["title"])
+        if not m:
+            if problems is not None:
+                problems.append(f"{src}: не распознан номер в «{it['title']}»")
+            continue
+        num, year = int(m.group(1)), 2000 + int(m.group(2))
+        if valid and num not in valid.get(year, set()):
+            continue  # не в списке действующих
+        if (year, num) in found:
+            continue
+        found.add((year, num))
+        if keep and not keep(it["title"], it["text"]):
+            continue  # вне нашего района
+        text = re.split(r"\n\s*COASTAL WARNING", it["text"])[0].strip()  # ПРИП Запад дублирует по-английски
+        notices.append({"source": src, "id": f"ПРИП {src.upper()} {num}/{str(year)[2:]}",
+                        "num": num, "year": year, "title": it["title"], "text": text})
+    return notices, found
+
+
 def collect():
     notices, valid_all, problems = [], {}, []
     for src, (url, keep) in SOURCES.items():
@@ -255,23 +278,8 @@ def collect():
         valid = parse_valid(page.valid_block or "")
         header = next((l.strip() for l in (page.valid_block or "").splitlines() if "ДЕЙСТВУЮЩИЕ" in l), "")
         valid_all[src] = {"header": header, "numbers": {y: sorted(v) for y, v in valid.items()}}
-        found = set()
-        for it in page.items:
-            m = re.search(r"(\d+)\s*/\s*(\d{2})", it["title"])
-            if not m:
-                problems.append(f"{src}: не распознан номер в «{it['title']}»")
-                continue
-            num, year = int(m.group(1)), 2000 + int(m.group(2))
-            if valid and num not in valid.get(year, set()):
-                continue  # не в списке действующих
-            if (year, num) in found:
-                continue
-            found.add((year, num))
-            if keep and not keep(it["title"], it["text"]):
-                continue  # вне нашего района
-            text = re.split(r"\n\s*COASTAL WARNING", it["text"])[0].strip()  # ПРИП Запад дублирует по-английски
-            notices.append({"source": src, "id": f"ПРИП {src.upper()} {num}/{str(year)[2:]}",
-                            "num": num, "year": year, "title": it["title"], "text": text})
+        found_notices, found = page_notices(src, page, keep, valid, problems)
+        notices += found_notices
         missing = [f"{n}/{str(y)[2:]}" for y, ns in valid.items() for n in sorted(ns) if (y, n) not in found]
         if missing:
             problems.append(f"{src}: в списке действующих, но текста на странице нет: {', '.join(missing)}")
@@ -421,6 +429,26 @@ def write_gpx_timezero(feats, path):
                     + "\n".join(wpts + trks) + "\n</gpx>\n", encoding="utf-8")
 
 
+CATS = [{"key": k, "label": l, "color": c} for k, l, c, _ in CATEGORIES] + \
+       [{"key": OTHER[0], "label": OTHER[1], "color": OTHER[2]}]
+
+
+def write_map_page(path, geo, notices, problems, mode="current", head=None, extra=None):
+    """Страница карты из map_template.html. mode="archive" — архив с выбором периода;
+    head — {старая строка: новая} для заголовка/описания/адреса страницы; extra — доп. поля в DATA."""
+    tpl = (Path(__file__).resolve().parent / "map_template.html").read_text(encoding="utf-8")
+    data = {"geo": geo, "notices": notices, "cats": CATS, "problems": problems, "mode": mode,
+            "author": {"name": AUTHOR, "email": AUTHOR_EMAIL}, **(extra or {})}
+    data = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+    for old, new in (head or {}).items():
+        tpl = tpl.replace(old, new)
+    tpl = tpl.replace("<!--__LEAFLET__-->", leaflet_tags())
+    tpl = tpl.replace("<!--__STATIC_LIST__-->", static_list(notices, CATS))
+    seo = Path(__file__).resolve().parent / "seo_meta.html"   # коды подтверждения Яндекс Вебмастера / Google
+    tpl = tpl.replace("<!--__VERIFY__-->", seo.read_text(encoding="utf-8").strip() if seo.exists() else "")
+    Path(path).write_text(tpl.replace("/*__DATA__*/null", data), encoding="utf-8")
+
+
 def run(out_dir=OUT):
     """Загружает действующие ПРИП и пишет все файлы в out_dir. Возвращает сводку."""
     out_dir = Path(out_dir)
@@ -437,18 +465,7 @@ def run(out_dir=OUT):
     write_gpx(feats, out_dir / "prip.gpx")
     write_gpx_timezero(feats, out_dir / "prip_timezero.gpx")
     write_kml(feats, out_dir / "prip.kml")
-
-    cats = [{"key": k, "label": l, "color": c} for k, l, c, _ in CATEGORIES] + \
-           [{"key": OTHER[0], "label": OTHER[1], "color": OTHER[2]}]
-    tpl = (Path(__file__).resolve().parent / "map_template.html").read_text(encoding="utf-8")
-    author = {"name": AUTHOR, "email": AUTHOR_EMAIL}
-    data = json.dumps({"geo": geo, "notices": notices, "cats": cats, "problems": problems, "author": author},
-                      ensure_ascii=False).replace("</", "<\\/")
-    tpl = tpl.replace("<!--__LEAFLET__-->", leaflet_tags())
-    tpl = tpl.replace("<!--__STATIC_LIST__-->", static_list(notices, cats))
-    seo = Path(__file__).resolve().parent / "seo_meta.html"   # коды подтверждения Яндекс Вебмастера / Google
-    tpl = tpl.replace("<!--__VERIFY__-->", seo.read_text(encoding="utf-8").strip() if seo.exists() else "")
-    (out_dir / "prip_map.html").write_text(tpl.replace("/*__DATA__*/null", data), encoding="utf-8")
+    write_map_page(out_dir / "prip_map.html", geo, notices, problems)
     return {"updated": now, "notices": notices, "features": feats, "valid": valid, "problems": problems,
             "out_dir": out_dir}
 

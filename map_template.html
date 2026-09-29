@@ -29,6 +29,11 @@
   h1 { font-size:16px; margin:0 0 4px; }
   .meta { color:var(--muted); font-size:12px; }
   .intro { margin:0 0 4px; }
+  .period { display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:12px; }
+  .period input, .period button { font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:6px;
+                                  background:var(--bg); color:var(--fg); }
+  .period button { cursor:pointer; }
+  .item .per { color:var(--fg); font-size:12px; }
   .ctrl { padding:8px 14px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:6px; }
   input[type=search] { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); }
   .chips { display:flex; flex-wrap:wrap; gap:4px 10px; font-size:12px; }
@@ -55,7 +60,8 @@
         ФГБУ «АМП Западной Арктики» (mapm.ru): ПРИП Архангельск, ПРИП Мурманск и ПРИП Запад
         (Печорское море, проливы Карские Ворота и Югорский Шар).</p>
       <div class="meta" id="meta"></div>
-      <div class="meta">Скачать: <a href="prip_timezero.gpx" download>GPX для TimeZero</a> ·
+      <div class="meta" id="nav"></div>
+      <div class="meta" id="downloads">Скачать: <a href="prip_timezero.gpx" download>GPX для TimeZero</a> ·
         <a href="prip.gpx" download>GPX</a> · <a href="prip.kml" download>KML</a> ·
         <a href="prip.geojson" download>GeoJSON</a></div>
       <div class="meta" id="author"></div>
@@ -65,6 +71,14 @@
     </header>
     <div id="warn"></div>
     <div class="ctrl">
+      <div class="period" id="period" hidden>
+        <label>с <input type="date" id="from"></label>
+        <label>по <input type="date" id="to"></label>
+        <button type="button" data-days="1">сутки</button>
+        <button type="button" data-days="30">30 дней</button>
+        <button type="button" data-days="0">всё время</button>
+      </div>
+      <div class="meta" id="count"></div>
       <input type="search" id="q" placeholder="Поиск: номер, район, текст…">
       <div class="chips" id="cats"></div>
       <div class="chips" id="srcs"></div>
@@ -80,9 +94,30 @@ const catColor = Object.fromEntries(DATA.cats.map(c => [c.key, c.color]));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt = iso => new Date(iso).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone:'Europe/Moscow'});
 
-document.getElementById('meta').innerHTML =
-  `Обновлено: ${fmt(DATA.geo.properties.updated)} МСК · действующих: ${DATA.notices.length}<br>` +
-  Object.values(DATA.geo.properties.headers).map(esc).join('<br>');
+const ARCHIVE = DATA.mode === 'archive';
+const fmtDay = iso => new Date(iso).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', timeZone:'Europe/Moscow'});
+const byId = Object.fromEntries(DATA.notices.map(n => [n.id, n]));
+// Срок действия ПРИП в архиве: «≈» — дата выпуска восстановлена по подписи ПРИП
+function period(n) {
+  const s = n.start_year_only ? `выпущен в ${n.year} г.` :
+            n.start ? (n.start_exact ? '' : '≈') + fmtDay(n.start) : 'дата выпуска неизвестна';
+  const e = n.end ? `${fmtDay(n.end)}${n.end_kind ? ' — ' + n.end_kind : ''}` : 'действует';
+  return `${s} … ${e}`;
+}
+if (ARCHIVE) {
+  document.getElementById('meta').innerHTML =
+    `Архив ведётся с ${fmtDay(DATA.archiveStarted)}, обновлён ${fmt(DATA.geo.properties.updated)} МСК. ` +
+    `ПРИП, отменённые до начала архива, известны частично — только те, что ещё показывает mapm.ru. ` +
+    `«≈» — дата выпуска восстановлена по подписи ПРИП.`;
+  document.getElementById('nav').innerHTML = '<a href="./">← Действующие ПРИП</a>';
+  document.getElementById('downloads').hidden = true;
+} else {
+  document.getElementById('meta').innerHTML =
+    `Обновлено: ${fmt(DATA.geo.properties.updated)} МСК · действующих: ${DATA.notices.length}<br>` +
+    Object.values(DATA.geo.properties.headers).map(esc).join('<br>');
+  document.getElementById('nav').innerHTML =
+    '<a href="https://kubiqq.github.io/PRIP/archive.html">Архив ПРИП — какие действовали в выбранный период →</a>';
+}
 const A = DATA.author;
 document.getElementById('author').innerHTML =
   `Автор: ${esc(A.name)}, <a href="mailto:${esc(A.email)}">${esc(A.email)}</a>`;
@@ -150,7 +185,8 @@ DATA.geo.features.forEach(f => {
   const style = {color, weight:2, fillOpacity:.18, dashArray: (p.kind.includes("упрощ") || p.kind.includes("между берегом")) || expired ? '6 4' : null};
   const lyr = L.geoJSON(f, {style, pointToLayer: (_, ll) => L.circleMarker(ll, {radius:6, color, weight:2, fillOpacity:.7})});
   lyr.bindPopup(`<b>${esc(p.id)}</b><br><span style="color:#666">${esc(p.kind)}${p.label ? ' · ' + esc(p.label) : ''}</span>` +
-    (p.cancel ? `<br>Отмена: ${fmt(p.cancel)} МСК${expired ? ' (срок истёк)' : ''}` : '') +
+    (ARCHIVE ? `<br>Действовал: ${esc(period(byId[p.id]))}` :
+      p.cancel ? `<br>Отмена: ${fmt(p.cancel)} МСК${expired ? ' (срок истёк)' : ''}` : '') +
     `<pre>${esc(p.text)}</pre>`, {maxWidth:420});
   (layers[p.id] ||= L.featureGroup()).addLayer(lyr);
 });
@@ -166,18 +202,44 @@ document.querySelectorAll('[data-cat],[data-src]').forEach(cb => cb.onchange = (
 });
 document.getElementById('q').oninput = e => { state.q = e.target.value.toUpperCase().trim(); render(); };
 
+// Период архива: показываются ПРИП, срок действия которых пересекается с [с; по] (даты по Москве)
+const fromEl = document.getElementById('from'), toEl = document.getElementById('to');
+const dayStr = d => new Date(d.getTime() + 3 * 3600e3).toISOString().slice(0, 10);
+function setDays(days) {
+  toEl.value = days ? dayStr(now) : '';
+  fromEl.value = days ? dayStr(new Date(now - (days - 1) * 86400e3)) : '';
+  render();
+}
+function inPeriod(n) {
+  const from = fromEl.value ? new Date(fromEl.value + 'T00:00:00+03:00') : null;
+  const to = toEl.value ? new Date(toEl.value + 'T23:59:59+03:00') : null;
+  const start = n.start ? new Date(n.start) : n.end ? new Date(n.end) : null;
+  const end = n.end ? new Date(n.end) : now;
+  return (!to || !start || start <= to) && (!from || end >= from);
+}
+if (ARCHIVE) {
+  document.getElementById('period').hidden = false;
+  fromEl.onchange = toEl.onchange = render;
+  document.querySelectorAll('[data-days]').forEach(b => b.onclick = () => setDays(+b.dataset.days));
+  toEl.value = dayStr(now); fromEl.value = dayStr(new Date(now - 29 * 86400e3));
+}
+
 function render() {
   const list = document.getElementById('list'); list.innerHTML = '';
+  let shown = 0;
   DATA.notices.forEach(n => {
     const show = state.cats.has(n.category) && state.srcs.has(n.source) &&
+      (!ARCHIVE || inPeriod(n)) &&
       (!state.q || (n.title + ' ' + n.text).toUpperCase().includes(state.q));
     const lg = layers[n.id];
     if (lg) show ? lg.addTo(map) : map.removeLayer(lg);
     if (!show) return;
+    shown++;
     const el = document.createElement('div'); el.className = 'item';
     el.innerHTML = `<span class="sw" style="background:${catColor[n.category]}"></span> <b>${esc(n.id)}</b>` +
       `<div class="t">${esc(n.title.replace(/^ПРИП \S+ \d+\/\d+\s*/, ''))}</div>` +
-      (n.cancel ? `<div class="t">до ${fmt(n.cancel)} МСК</div>` : '') +
+      (ARCHIVE ? `<div class="per">${esc(period(n))}</div>` :
+        n.cancel ? `<div class="t">до ${fmt(n.cancel)} МСК</div>` : '') +
       (n.cancelled_points && n.cancelled_points.length ? `<div class="t">пункт(ы) ${n.cancelled_points.join(', ')} отменены другим ПРИП — на карте не показаны</div>` : '') +
       (lg ? '' : '<div class="nogeo">без координат — только текст</div>');
     el.onclick = () => {
@@ -187,6 +249,7 @@ function render() {
     };
     list.appendChild(el);
   });
+  document.getElementById('count').textContent = ARCHIVE ? `Показано ПРИП: ${shown} из ${DATA.notices.length}` : '';
 }
 render();
 </script>
