@@ -433,20 +433,22 @@ CATS = [{"key": k, "label": l, "color": c} for k, l, c, _ in CATEGORIES] + \
        [{"key": OTHER[0], "label": OTHER[1], "color": OTHER[2]}]
 
 
-def write_map_page(path, geo, notices, problems, mode="current", head=None, extra=None):
-    """Страница карты из map_template.html. mode="archive" — архив с выбором периода;
-    head — {старая строка: новая} для заголовка/описания/адреса страницы; extra — доп. поля в DATA."""
-    tpl = (Path(__file__).resolve().parent / "map_template.html").read_text(encoding="utf-8")
-    data = {"geo": geo, "notices": notices, "cats": CATS, "problems": problems, "mode": mode,
-            "author": {"name": AUTHOR, "email": AUTHOR_EMAIL}, **(extra or {})}
-    data = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
-    for old, new in (head or {}).items():
-        tpl = tpl.replace(old, new)
+def fill_template(name, data, static_html=""):
+    """Шаблон страницы (map_template.html / archive_template.html) + данные, Leaflet и коды подтверждения."""
+    tpl = (Path(__file__).resolve().parent / name).read_text(encoding="utf-8")
+    data = {**data, "author": {"name": AUTHOR, "email": AUTHOR_EMAIL}}
     tpl = tpl.replace("<!--__LEAFLET__-->", leaflet_tags())
-    tpl = tpl.replace("<!--__STATIC_LIST__-->", static_list(notices, CATS))
+    tpl = tpl.replace("<!--__STATIC_LIST__-->", static_html)
     seo = Path(__file__).resolve().parent / "seo_meta.html"   # коды подтверждения Яндекс Вебмастера / Google
     tpl = tpl.replace("<!--__VERIFY__-->", seo.read_text(encoding="utf-8").strip() if seo.exists() else "")
-    Path(path).write_text(tpl.replace("/*__DATA__*/null", data), encoding="utf-8")
+    return tpl.replace("/*__DATA__*/null", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
+
+
+def write_map_page(path, geo, notices, problems):
+    """Карта действующих ПРИП (map_template.html)."""
+    html_text = fill_template("map_template.html", {"geo": geo, "notices": notices, "cats": CATS,
+                                                    "problems": problems}, static_list(notices, CATS))
+    Path(path).write_text(html_text, encoding="utf-8")
 
 
 def run(out_dir=OUT):

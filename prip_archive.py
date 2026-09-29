@@ -16,6 +16,7 @@
 Автор: Смирнов В.В., smirnov.ecology@yandex.ru
 """
 import datetime as dt
+import html
 import json
 import re
 import sys
@@ -188,26 +189,17 @@ def build_page(arch, out_dir, now, problems):
              "end": r.get("end"), "end_kind": r.get("end_kind"), "active": r.get("active", False)}
         notices.append(n)
     notices.sort(key=lambda n: (n["start"] or n["end"] or "", n["num"]), reverse=True)
-    feats = []
     for n in notices:   # по одному: частичные отмены из других ПРИП в архиве не применяются
-        feats += pu.build_features([n])
-    geo = {"type": "FeatureCollection", "features": feats,
-           "properties": {"updated": iso(now), "headers": {}}}
-    head = {
-        "<title>ПРИП Белое, Баренцево, Печорское море — карта действующих ПРИП</title>":
-            "<title>Архив ПРИП Белого, Баренцева и Печорского морей</title>",
-        'content="Карта действующих ПРИП': 'content="Архив ПРИП: какие ПРИП действовали в выбранный период. Карта ПРИП',
-        '<link rel="canonical" href="https://kubiqq.github.io/PRIP/">':
-            '<link rel="canonical" href="https://kubiqq.github.io/PRIP/archive.html">',
-        '<meta property="og:url" content="https://kubiqq.github.io/PRIP/">':
-            '<meta property="og:url" content="https://kubiqq.github.io/PRIP/archive.html">',
-        "<h1>ПРИП — Белое, Баренцево и Печорское море</h1>": "<h1>Архив ПРИП — Белое, Баренцево и Печорское море</h1>",
-        "Карта действующих прибрежных навигационных предупреждений (ПРИП) по данным":
-            "Архив прибрежных навигационных предупреждений (ПРИП): какие ПРИП действовали в выбранный период. "
-            "По данным",
-    }
-    pu.write_map_page(Path(out_dir) / "archive.html", geo, notices, problems, mode="archive", head=head,
-                      extra={"archiveStarted": arch["started"]})
+        feats = pu.build_features([n])
+        n["geo"] = [{"type": "Feature", "geometry": f["geometry"],
+                     "properties": {"kind": f["properties"]["kind"], "label": f["properties"]["label"]}} for f in feats]
+    # список ПРИП прямо в HTML — для поисковиков; скрипт страницы заменяет его таблицей по фильтру
+    static = "\n".join(f'<tr><td class="id">{html.escape(n["id"])}</td>'
+                       f'<td class="hide">{html.escape(re.sub(r"^ПРИП \S+ \d+/\d+\s*", "", n["title"]))}</td>'
+                       f'<td></td><td class="hide"></td></tr>' for n in notices)
+    data = {"notices": notices, "cats": pu.CATS, "problems": problems, "started": arch["started"], "updated": iso(now)}
+    (Path(out_dir) / "archive.html").write_text(pu.fill_template("archive_template.html", data, static),
+                                                encoding="utf-8")
     return notices
 
 

@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Архив ПРИП Белого, Баренцева и Печорского морей</title>
+<meta name="description" content="Архив ПРИП (прибрежных навигационных предупреждений) Белого, Баренцева и Печорского морей: какие ПРИП действовали в выбранный период. ПРИП Архангельск, ПРИП Мурманск, ПРИП Запад.">
+<link rel="canonical" href="https://kubiqq.github.io/PRIP/archive.html">
+<meta name="robots" content="index, follow">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ru_RU">
+<meta property="og:url" content="https://kubiqq.github.io/PRIP/archive.html">
+<meta property="og:title" content="Архив ПРИП Белого, Баренцева и Печорского морей">
+<meta property="og:description" content="Какие прибрежные навигационные предупреждения действовали в выбранный период.">
+<!--__VERIFY__-->
+<!--__LEAFLET__-->
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#1b1f24; --muted:#5b6570; --line:#dde2e7; --hl:#eef4fb;
+          --accent:#1a5fb4; --btn-fg:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16191d; --fg:#e6e9ec; --muted:#9aa4ae; --line:#2c3238; --hl:#1f2a36; --accent:#78aeed; --btn-fg:#10151b; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:20px 16px 40px; }
+  h1 { font-size:22px; line-height:1.25; margin:0 0 6px; }
+  a { color:var(--accent); }
+  .muted { color:var(--muted); font-size:13px; }
+  p { margin:0 0 8px; }
+  form { display:flex; flex-wrap:wrap; align-items:flex-end; gap:10px 14px; margin:16px 0 10px; padding:12px;
+         border:1px solid var(--line); border-radius:10px; }
+  .f { display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--muted); }
+  .date { display:flex; position:relative; }
+  .date input { width:118px; border-radius:6px 0 0 6px; }
+  .date input.bad { border-color:#c0392b; }
+  .date button.cal { background:var(--bg); color:var(--fg); border-color:var(--line); border-left:0; font-weight:400;
+                     padding:6px 8px; border-radius:0 6px 6px 0; }
+  #calendar { position:absolute; z-index:10; background:var(--bg); border:1px solid var(--line); border-radius:8px;
+              padding:8px; box-shadow:0 6px 24px rgba(0,0,0,.18); width:252px; }
+  #calendar .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; font-weight:600; }
+  #calendar .head button { background:none; color:var(--fg); border:0; padding:2px 10px; font-size:16px; }
+  #calendar .grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:2px; text-align:center; }
+  #calendar .wd { font-size:11px; color:var(--muted); padding:2px 0; }
+  #calendar .grid button { background:none; color:var(--fg); border:1px solid transparent; font-weight:400; padding:5px 0; }
+  #calendar .grid button:hover { border-color:var(--accent); }
+  #calendar .grid button.sel { background:var(--accent); color:var(--btn-fg); }
+  #calendar .grid button.today { border-color:var(--line); }
+  input, select, button { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px;
+                          background:var(--bg); color:var(--fg); }
+  input[type=search] { min-width:220px; }
+  button { cursor:pointer; background:var(--accent); color:var(--btn-fg); border-color:var(--accent); font-weight:600;
+           padding:7px 18px; }
+  #count { margin:6px 0; font-weight:600; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; vertical-align:top; padding:7px 8px; border-bottom:1px solid var(--line); }
+  th { font-size:12px; color:var(--muted); font-weight:600; }
+  tr.row { cursor:pointer; }
+  tr.row:hover, tr.row.open { background:var(--hl); }
+  td.id { white-space:nowrap; font-weight:600; }
+  .sw { width:10px; height:10px; border-radius:2px; display:inline-block; margin-right:6px; }
+  .kind { color:var(--muted); font-size:12px; }
+  tr.details td { background:var(--hl); }
+  .details-box { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:12px; }
+  pre { white-space:pre-wrap; font-size:12px; margin:0; max-height:360px; overflow:auto; }
+  .mini { height:320px; border-radius:8px; border:1px solid var(--line); }
+  .nogeo { color:var(--muted); font-size:12px; }
+  .warn { background:#fff3cd; color:#664d03; padding:6px 10px; font-size:12px; border-radius:6px; margin:6px 0; }
+  footer { margin-top:28px; }
+  @media (max-width:700px) {
+    .details-box { grid-template-columns:1fr; }
+    th.hide, td.hide { display:none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="muted"><a href="./">← Карта действующих ПРИП</a></p>
+  <h1>Архив ПРИП — Белое, Баренцево и Печорское море</h1>
+  <p>Какие прибрежные навигационные предупреждения (ПРИП) действовали в выбранный период. По данным
+    ФГБУ «АМП Западной Арктики» (mapm.ru): ПРИП Архангельск, ПРИП Мурманск и ПРИП Запад
+    (Печорское море, проливы Карские Ворота и Югорский Шар).</p>
+  <p class="muted" id="meta"></p>
+
+  <form id="filters">
+    <div class="f">с<span class="date"><input type="text" id="from" placeholder="ДД.ММ.ГГГГ" inputmode="numeric"
+      maxlength="10" autocomplete="off"><button type="button" class="cal" data-for="from" title="Календарь">📅</button></span></div>
+    <div class="f">по<span class="date"><input type="text" id="to" placeholder="ДД.ММ.ГГГГ" inputmode="numeric"
+      maxlength="10" autocomplete="off"><button type="button" class="cal" data-for="to" title="Календарь">📅</button></span></div>
+    <label class="f">Источник<select id="src"><option value="">все</option></select></label>
+    <label class="f">Тип<select id="cat"><option value="">все</option></select></label>
+    <label class="f">Поиск<input type="search" id="q" placeholder="номер, район, текст"></label>
+    <button type="submit">Показать</button>
+  </form>
+  <p class="muted">Пустые даты — без ограничения. «≈» — дата выпуска восстановлена по подписи ПРИП.</p>
+  <div id="warn"></div>
+  <div id="count"></div>
+  <table>
+    <thead><tr><th>ПРИП</th><th class="hide">Район, карты</th><th>Действовал</th><th class="hide">Окончание</th></tr></thead>
+    <tbody id="rows"><!--__STATIC_LIST__--></tbody>
+  </table>
+
+  <footer class="muted">
+    <div id="author"></div>
+    <div id="privacy" hidden>Для подсчёта посещений используется Яндекс Метрика: она сохраняет cookies и получает
+      технические данные (IP-адрес, браузер, устройство). Продолжая пользоваться страницей, вы соглашаетесь с этим.</div>
+  </footer>
+</main>
+<script>
+const DATA = /*__DATA__*/null;
+const now = new Date();
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = iso => new Date(iso).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', timeZone:'Europe/Moscow'});
+const fmtDay = iso => new Date(iso).toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric', timeZone:'Europe/Moscow'});
+const cat = Object.fromEntries(DATA.cats.map(c => [c.key, c]));
+
+document.getElementById('meta').textContent =
+  `Архив ведётся с ${fmtDay(DATA.started)}, обновлён ${fmt(DATA.updated)} МСК, ПРИП в архиве: ${DATA.notices.length}. ` +
+  `ПРИП, отменённые до начала архива, известны частично — только те, что ещё показывает mapm.ru.`;
+document.getElementById('author').innerHTML =
+  `Автор: ${esc(DATA.author.name)}, <a href="mailto:${esc(DATA.author.email)}">${esc(DATA.author.email)}</a>`;
+if (DATA.problems.length) document.getElementById('warn').innerHTML =
+  DATA.problems.map(p => `<div class="warn">⚠ ${esc(p)}</div>`).join('');
+
+const fromEl = document.getElementById('from'), toEl = document.getElementById('to');
+const srcEl = document.getElementById('src'), catEl = document.getElementById('cat'), qEl = document.getElementById('q');
+[...new Set(DATA.notices.map(n => n.source))].forEach(s =>
+  srcEl.insertAdjacentHTML('beforeend', `<option value="${esc(s)}">ПРИП ${esc(s)}</option>`));
+DATA.cats.forEach(c => catEl.insertAdjacentHTML('beforeend', `<option value="${c.key}">${esc(c.label)}</option>`));
+
+// ---------- даты ДД.ММ.ГГГГ и календарь (свой, одинаково работает во всех браузерах) ----------
+const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const pad = x => String(x).padStart(2, '0');
+const dayStr = d => { const m = new Date(d.getTime() + 3 * 3600e3);   // дата по Москве
+  return `${pad(m.getUTCDate())}.${pad(m.getUTCMonth() + 1)}.${m.getUTCFullYear()}`; };
+function parseDay(v) {            // 'ДД.ММ.ГГГГ' -> {y, m, d} или null
+  const r = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(v.trim());
+  if (!r) return null;
+  const d = +r[1], m = +r[2], y = +r[3], t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCDate() === d && t.getUTCMonth() === m - 1 ? {y, m, d} : null;
+}
+const bound = (v, end) => { const p = parseDay(v);   // начало или конец суток по Москве
+  return p && new Date(`${p.y}-${pad(p.m)}-${pad(p.d)}T${end ? '23:59:59' : '00:00:00'}+03:00`); };
+
+[fromEl, toEl].forEach(el => el.addEventListener('input', () => {   // точки ставятся сами: 20092026 -> 20.09.2026
+  const digits = el.value.replace(/\D/g, '').slice(0, 8);
+  el.value = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)].filter(Boolean).join('.');
+  el.classList.remove('bad');
+}));
+
+let calFor = null, calY, calM;
+const cal = document.createElement('div'); cal.id = 'calendar'; cal.hidden = true;
+document.body.appendChild(cal);
+function drawCal() {
+  const input = document.getElementById(calFor), sel = parseDay(input.value), today = parseDay(dayStr(now));
+  const first = (new Date(Date.UTC(calY, calM, 1)).getUTCDay() + 6) % 7;      // понедельник — первый
+  const days = new Date(Date.UTC(calY, calM + 1, 0)).getUTCDate();
+  let cells = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(w => `<div class="wd">${w}</div>`).join('') + '<div></div>'.repeat(first);
+  for (let d = 1; d <= days; d++) {
+    const is = p => p && p.y === calY && p.m === calM + 1 && p.d === d;
+    cells += `<button type="button" data-d="${d}" class="${is(sel) ? 'sel' : ''} ${is(today) ? 'today' : ''}">${d}</button>`;
+  }
+  cal.innerHTML = `<div class="head"><button type="button" data-step="-1" title="Предыдущий месяц">‹</button>
+    <span>${MONTHS[calM]} ${calY}</span><button type="button" data-step="1" title="Следующий месяц">›</button></div>
+    <div class="grid">${cells}</div>`;
+}
+function openCal(id, btn) {
+  if (calFor === id && !cal.hidden) { cal.hidden = true; calFor = null; return; }
+  calFor = id;
+  const p = parseDay(document.getElementById(id).value) || parseDay(dayStr(now));
+  calY = p.y; calM = p.m - 1;
+  drawCal();
+  const r = btn.closest('.date').getBoundingClientRect();
+  cal.style.left = Math.max(8, Math.min(r.left + scrollX, scrollX + innerWidth - 268)) + 'px';
+  cal.style.top = (r.bottom + scrollY + 4) + 'px';
+  cal.hidden = false;
+}
+document.querySelectorAll('button.cal').forEach(b => b.onclick = e => { e.stopPropagation(); openCal(b.dataset.for, b); });
+cal.onclick = e => {
+  e.stopPropagation();
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.step) {
+    calM += +b.dataset.step;
+    if (calM < 0) { calM = 11; calY--; } if (calM > 11) { calM = 0; calY++; }
+    drawCal();
+  } else if (b.dataset.d) {
+    const el = document.getElementById(calFor);
+    el.value = `${pad(b.dataset.d)}.${pad(calM + 1)}.${calY}`;
+    el.classList.remove('bad');
+    cal.hidden = true; calFor = null;
+  }
+};
+document.addEventListener('click', () => { cal.hidden = true; calFor = null; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { cal.hidden = true; calFor = null; } });
+
+// по умолчанию — последние 30 дней
+toEl.value = dayStr(now);
+fromEl.value = dayStr(new Date(now - 29 * 86400e3));
+
+function startText(n) {
+  if (n.start_year_only) return `выпущен в ${n.year} г.`;
+  return n.start ? (n.start_exact ? '' : '≈') + fmtDay(n.start) : 'дата выпуска неизвестна';
+}
+function inPeriod(n, from, to) {
+  const start = n.start ? new Date(n.start) : n.end ? new Date(n.end) : null;
+  const end = n.end ? new Date(n.end) : now;
+  return (!to || !start || start <= to) && (!from || end >= from);
+}
+
+function show() {
+  let ok = true;
+  [fromEl, toEl].forEach(el => { const bad = el.value.trim() !== '' && !parseDay(el.value);
+    el.classList.toggle('bad', bad); if (bad) ok = false; });
+  if (!ok) { document.getElementById('count').textContent = 'Проверьте даты: нужен формат ДД.ММ.ГГГГ'; return; }
+  const from = fromEl.value.trim() ? bound(fromEl.value, false) : null;
+  const to = toEl.value.trim() ? bound(toEl.value, true) : null;
+  const q = qEl.value.toUpperCase().trim();
+  const found = DATA.notices.filter(n => inPeriod(n, from, to) &&
+    (!srcEl.value || n.source === srcEl.value) && (!catEl.value || n.category === catEl.value) &&
+    (!q || (n.id + ' ' + n.title + ' ' + n.text).toUpperCase().includes(q)));
+  const period = from || to ? ` за период ${from ? 'с ' + fmtDay(from) : ''} ${to ? 'по ' + fmtDay(to) : ''}` : ' за всё время';
+  document.getElementById('count').textContent = `Действовало ПРИП${period}: ${found.length}`;
+  document.getElementById('rows').innerHTML = found.map(n => {
+    const c = cat[n.category] || {color:'#7f7f7f', label:''};
+    const region = n.title.replace(/^ПРИП \S+ \d+\/\d+\s*/, '');
+    return `<tr class="row" data-id="${esc(n.id)}">
+      <td class="id"><span class="sw" style="background:${c.color}" title="${esc(c.label)}"></span>${esc(n.id)}</td>
+      <td class="hide">${esc(region)}</td>
+      <td>${esc(startText(n))} — ${n.end ? esc(fmtDay(n.end)) : '<b>действует</b>'}</td>
+      <td class="hide kind">${esc(n.end_kind || '')}</td></tr>`;
+  }).join('');
+}
+document.getElementById('filters').onsubmit = e => { e.preventDefault(); closeDetails(); show(); };
+
+// Подробности: полный текст и мини-карта выбранного ПРИП
+const byId = Object.fromEntries(DATA.notices.map(n => [n.id, n]));
+let mini = null;
+function closeDetails() {
+  if (mini) { mini.remove(); mini = null; }
+  document.querySelectorAll('tr.details').forEach(r => r.remove());
+  document.querySelectorAll('tr.row.open').forEach(r => r.classList.remove('open'));
+}
+document.getElementById('rows').onclick = e => {
+  const row = e.target.closest('tr.row');
+  if (!row) return;
+  const wasOpen = row.classList.contains('open');
+  closeDetails();
+  if (wasOpen) return;
+  const n = byId[row.dataset.id], c = cat[n.category] || {color:'#7f7f7f'};
+  row.classList.add('open');
+  row.insertAdjacentHTML('afterend', `<tr class="details"><td colspan="4"><div class="details-box">
+    <div><div class="kind">${esc(startText(n))} — ${n.end ? esc(fmtDay(n.end)) + (n.end_kind ? ', ' + esc(n.end_kind) : '') : 'действует'}</div>
+    <pre>${esc(n.text.replace(/\n[ \t]*(?=\n)/g, '').replace(/\n{2,}/g, '\n'))}</pre></div>
+    <div>${n.geo.length ? '<div class="mini" id="mini"></div>' : '<p class="nogeo">Координат в тексте нет.</p>'}</div>
+    </div></td></tr>`);
+  if (!n.geo.length) return;
+  mini = L.map('mini', {attributionControl:true});
+  const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',
+    {maxZoom:18, maxNativeZoom:10, attribution:'© Esri, GEBCO, NOAA'}).addTo(mini);   // крупнее 10 — «no data»
+  let loaded = false;
+  esri.on('tileload', () => loaded = true);
+  setTimeout(() => { if (!loaded && mini) L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    {maxZoom:18, attribution:'© OpenStreetMap'}).addTo(mini); }, 8000);   // запасная подложка
+  const grp = L.geoJSON({type:'FeatureCollection', features:n.geo}, {
+    style: {color:c.color, weight:2, fillOpacity:.2},
+    pointToLayer: (_, ll) => L.circleMarker(ll, {radius:6, color:c.color, weight:2, fillOpacity:.7}),
+    onEachFeature: (f, l) => l.bindTooltip(esc(f.properties.kind + (f.properties.label ? ' · ' + f.properties.label : '')))
+  }).addTo(mini);
+  mini.fitBounds(grp.getBounds(), {maxZoom:11, padding:[20, 20]});
+};
+
+show();
+</script>
+<script>
+// Яндекс Метрика — только на опубликованном сайте
+if (location.hostname.endsWith('github.io')) {
+  (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+  m[i].l=1*new Date();
+  for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+  k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+  (window, document, "script", "https://mc.yandex.ru/metrika/tag.js?id=113127841", "ym");
+  ym(113127841, "init", {clickmap:true, trackLinks:true, accurateTrackBounce:true});
+  document.getElementById('privacy').hidden = false;
+}
+</script>
+</body>
+</html>
