@@ -174,16 +174,24 @@ def category(text):
     return OTHER[0]
 
 
-def parse_cancel(text, year):
-    """'ОТМ ЭТОТ НР 302100 СЕНТ' / 'ОТМ ЭТОТ НР 31 ОКТ' -> ISO-время отмены (МСК)."""
-    m = re.search(r"ОТМ\w*\s+ЭТОТ\s+НР\s+(\d{2})\s*(\d{2})?(\d{2})?\s*([А-Я]{3})", text)
+def parse_cancel(text, year, now=None):
+    """'ОТМ ЭТОТ НР 302100 СЕНТ' / 'ОТМ ЭТОТ НР 31 ОКТ' / 'ОТМ ЭТОТ НР 02 ОКТ 2026' -> ISO-время отмены (МСК).
+    year — год из номера ПРИП, если в тексте года нет. now — для ПРИП прошлых лет без года в сроке:
+    ПРИП 330/25 «по 01 ОКТ» ещё действует в 2026 — значит, срок в следующем году."""
+    m = re.search(r"ОТМ\w*\s+ЭТОТ\s+НР\s+(\d{2})\s*(\d{2})?(\d{2})?\s*([А-Я]{3})[А-Я]*\.?(?:\s+(\d{4}))?", text)
     if not m or m.group(4) not in MONTHS:
         return None
     day, hh, mm, mon = int(m.group(1)), int(m.group(2) or 0), int(m.group(3) or 0), MONTHS[m.group(4)]
     try:
-        return dt.datetime(year, mon, day, min(hh, 23), mm, tzinfo=MSK).isoformat()
+        t = dt.datetime(int(m.group(5) or year), mon, day, min(hh, 23), mm, tzinfo=MSK)
     except ValueError:
         return None
+    if not m.group(5) and now and year < now.year and t < now - dt.timedelta(days=120):
+        try:
+            t = t.replace(year=year + 1)
+        except ValueError:   # 29 февраля
+            return None
+    return t.isoformat()
 
 
 def circle(lon, lat, radius_m, n=48):
@@ -301,7 +309,7 @@ def build_features(notices):
     cancelled = partial_cancels(notices)
     for n in notices:
         cat = category(n["title"] + " " + n["text"])
-        cancel = parse_cancel(n["text"], n["year"])
+        cancel = parse_cancel(n["text"], n["year"], dt.datetime.now(MSK))
         n["cancelled_points"] = sorted(cancelled.get((n["source"], n["num"], n["year"]), ()))
         geoms = geometries(n["text"], n["cancelled_points"])
         n["features"] = len(geoms)
@@ -444,32 +452,48 @@ def fill_template(name, data, static_html=""):
     return tpl.replace("/*__DATA__*/null", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
 
 
-def write_map_page(path, geo, notices, problems):
-    """Карта действующих ПРИП (map_template.html)."""
+def write_map_page(path, geo, notices, problems, expired=(), expired_feats=()):
+    """Карта действующих ПРИП (map_template.html). Истёкшие — отдельно, показываются по флажку."""
     html_text = fill_template("map_template.html", {"geo": geo, "notices": notices, "cats": CATS,
-                                                    "problems": problems}, static_list(notices, CATS))
+                                                    "problems": problems, "expired": list(expired),
+                                                    "expiredFeatures": list(expired_feats)},
+                              static_list(notices, CATS))
     Path(path).write_text(html_text, encoding="utf-8")
+
+
+def is_expired(notice, now):
+    """Срок из «ОТМ ЭТОТ НР 302100 СЕНТ» прошёл. mapm.ru убирает такие ПРИП из списка действующих
+    с опозданием, а для прокладки они уже не действуют."""
+    cancel = notice.get("cancel")
+    return bool(cancel) and dt.datetime.fromisoformat(cancel) <= now
 
 
 def run(out_dir=OUT):
     """Загружает действующие ПРИП и пишет все файлы в out_dir. Возвращает сводку."""
     out_dir = Path(out_dir)
     notices, valid, problems = collect()
-    feats = build_features(notices)
-    now = dt.datetime.now(MSK).isoformat(timespec="minutes")
+    # частичные отмены считаются по всем ПРИП списка: пункт, отменённый истёкшим ПРИП, остаётся отменённым
+    all_feats = build_features(notices)
+    now_dt = dt.datetime.now(MSK)
+    now = now_dt.isoformat(timespec="minutes")
+    expired = [n for n in notices if is_expired(n, now_dt)]
+    expired_ids = {n["id"] for n in expired}
+    notices = [n for n in notices if n["id"] not in expired_ids]
+    feats = [f for f in all_feats if f["properties"]["id"] not in expired_ids]
+    expired_feats = [f for f in all_feats if f["properties"]["id"] in expired_ids]
     out_dir.mkdir(parents=True, exist_ok=True)
     geo = {"type": "FeatureCollection", "features": feats,
            "properties": {"updated": now, "headers": {s: v["header"] for s, v in valid.items()}}}
     (out_dir / "prip.geojson").write_text(json.dumps(geo, ensure_ascii=False), encoding="utf-8")
     (out_dir / "prip_raw.json").write_text(json.dumps(
-        {"updated": now, "valid": valid, "problems": problems, "notices": notices},
+        {"updated": now, "valid": valid, "problems": problems, "notices": notices, "expired": expired},
         ensure_ascii=False, indent=1), encoding="utf-8")
     write_gpx(feats, out_dir / "prip.gpx")
     write_gpx_timezero(feats, out_dir / "prip_timezero.gpx")
     write_kml(feats, out_dir / "prip.kml")
-    write_map_page(out_dir / "prip_map.html", geo, notices, problems)
+    write_map_page(out_dir / "prip_map.html", geo, notices, problems, expired, expired_feats)
     return {"updated": now, "notices": notices, "features": feats, "valid": valid, "problems": problems,
-            "out_dir": out_dir}
+            "expired": expired, "out_dir": out_dir}
 
 
 def main():
@@ -481,6 +505,9 @@ def main():
         print(f"  {s}: {v['header']}")
     if no_geo:
         print(f"  без координат ({len(no_geo)}): {', '.join(no_geo)}")
+    if r["expired"]:
+        print(f"  срок истёк, но ещё в списке mapm.ru ({len(r['expired'])}): "
+              + ", ".join(f"{n['id']} (до {n['cancel'][:16]})" for n in r["expired"]))
     for p in r["problems"]:
         print("  ВНИМАНИЕ:", p)
     print(f"  -> {r['out_dir'] / 'prip_map.html'}")

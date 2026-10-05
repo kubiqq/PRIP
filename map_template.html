@@ -40,6 +40,7 @@
   .item b { font-size:13px; }
   .item .t { color:var(--muted); font-size:12px; }
   .item .nogeo { color:#c0392b; font-size:11px; }
+  .item.expired b, .item.expired .t { color:var(--muted); text-decoration:line-through; }
   .warn { background:#fff3cd; color:#664d03; padding:6px 14px; font-size:12px; }
   pre { white-space:pre-wrap; font-size:12px; margin:6px 0 0; max-height:280px; overflow:auto; }
   .leaflet-popup-content { margin:10px 12px; }
@@ -81,14 +82,25 @@ const catColor = Object.fromEntries(DATA.cats.map(c => [c.key, c.color]));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt = iso => new Date(iso).toLocaleString('ru-RU', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', timeZone:'Europe/Moscow'});
 
+// Истёкшие: срок «ОТМ ЭТОТ НР …» прошёл, но mapm.ru ещё держит ПРИП в списке действующих.
+// Проверяется и здесь: страница собирается раз в час, а срок может наступить между сборками.
+const isExpired = n => !!n.cancel && new Date(n.cancel) <= now;
+const NOTICES = [...DATA.notices, ...(DATA.expired || [])];
+NOTICES.forEach(n => n.expired = isExpired(n));
+const FEATURES = [...DATA.geo.features, ...(DATA.expiredFeatures || [])];
+const expiredList = NOTICES.filter(n => n.expired);
+const short = id => id.replace(/^ПРИП (\S{3})\S* /, 'ПРИП $1 ');
+
 document.getElementById('meta').innerHTML =
-  `Обновлено: ${fmt(DATA.geo.properties.updated)} МСК · действующих: ${DATA.notices.length}<br>` +
+  `Обновлено: ${fmt(DATA.geo.properties.updated)} МСК · действующих: ${NOTICES.length - expiredList.length}<br>` +
   Object.values(DATA.geo.properties.headers).map(esc).join('<br>');
 const A = DATA.author;
 document.getElementById('author').innerHTML =
   `Автор: ${esc(A.name)}, <a href="mailto:${esc(A.email)}">${esc(A.email)}</a>`;
-if (DATA.problems.length) document.getElementById('warn').innerHTML =
-  DATA.problems.map(p => `<div class="warn">⚠ ${esc(p)}</div>`).join('');
+document.getElementById('warn').innerHTML =
+  DATA.problems.map(p => `<div class="warn">⚠ ${esc(p)}</div>`).join('') +
+  (expiredList.length ? `<div class="warn">⏱ Срок истёк, но ещё в списке mapm.ru — на карте скрыты, в файлы не входят: ` +
+    expiredList.map(n => `${esc(short(n.id))} (до ${fmt(n.cancel)})`).join(', ') + '</div>' : '');
 
 // Подложки. Яндекс использует эллипсоидальную проекцию EPSG:3395 — при переключении меняем CRS карты.
 const Y = L.CRS.EPSG3395, M = L.CRS.EPSG3857;
@@ -145,22 +157,31 @@ function watch(layer) {
 watch(current);
 
 const layers = {};   // id -> L.featureGroup
-DATA.geo.features.forEach(f => {
-  const p = f.properties, color = catColor[p.category];
-  const expired = p.cancel && new Date(p.cancel) < now;
-  const style = {color, weight:2, fillOpacity:.18, dashArray: (p.kind.includes("упрощ") || p.kind.includes("между берегом")) || expired ? '6 4' : null};
-  const lyr = L.geoJSON(f, {style, pointToLayer: (_, ll) => L.circleMarker(ll, {radius:6, color, weight:2, fillOpacity:.7})});
-  lyr.bindPopup(`<b>${esc(p.id)}</b><br><span style="color:#666">${esc(p.kind)}${p.label ? ' · ' + esc(p.label) : ''}</span>` +
-    (p.cancel ? `<br>Отмена: ${fmt(p.cancel)} МСК${expired ? ' (срок истёк)' : ''}` : '') +
+FEATURES.forEach(f => {
+  const p = f.properties, expired = isExpired(p);
+  const color = expired ? '#8a8f96' : catColor[p.category];   // истёкшие — серым пунктиром
+  const style = {color, weight:2, fillOpacity: expired ? .06 : .18,
+                 dashArray: (p.kind.includes("упрощ") || p.kind.includes("между берегом")) || expired ? '6 4' : null};
+  const lyr = L.geoJSON(f, {style, pointToLayer: (_, ll) => L.circleMarker(ll, {radius:6, color, weight:2, fillOpacity: expired ? .2 : .7})});
+  lyr.bindPopup(`<b>${esc(p.id)}</b>${expired ? ' <span style="color:#b00020">— срок истёк, не действует</span>' : ''}` +
+    `<br><span style="color:#666">${esc(p.kind)}${p.label ? ' · ' + esc(p.label) : ''}</span>` +
+    (p.cancel ? `<br>Отмена: ${fmt(p.cancel)} МСК` : '') +
     `<pre>${esc(p.text)}</pre>`, {maxWidth:420});
   (layers[p.id] ||= L.featureGroup()).addLayer(lyr);
 });
 
-const state = {q:'', cats:new Set(DATA.cats.map(c => c.key)), srcs:new Set(DATA.notices.map(n => n.source))};
+const state = {q:'', cats:new Set(DATA.cats.map(c => c.key)), srcs:new Set(NOTICES.map(n => n.source)),
+               showExpired:false};
 document.getElementById('cats').innerHTML = DATA.cats.map(c =>
   `<label><input type="checkbox" data-cat="${c.key}" checked><span class="sw" style="background:${c.color}"></span>${c.label}</label>`).join('');
 document.getElementById('srcs').innerHTML = [...state.srcs].map(s =>
   `<label><input type="checkbox" data-src="${esc(s)}" checked>ПРИП ${esc(s)}${s === 'Запад' ? ' (Печорское море)' : ''}</label>`).join('');
+if (expiredList.length) {
+  document.getElementById('srcs').insertAdjacentHTML('afterend',
+    `<div class="chips"><label><input type="checkbox" id="showExpired">Показать истёкшие (${expiredList.length}) — ` +
+    `срок прошёл, но ещё в списке mapm.ru</label></div>`);
+  document.getElementById('showExpired').onchange = e => { state.showExpired = e.target.checked; render(); };
+}
 document.querySelectorAll('[data-cat],[data-src]').forEach(cb => cb.onchange = () => {
   const set = cb.dataset.cat ? state.cats : state.srcs, key = cb.dataset.cat || cb.dataset.src;
   cb.checked ? set.add(key) : set.delete(key); render();
@@ -169,16 +190,18 @@ document.getElementById('q').oninput = e => { state.q = e.target.value.toUpperCa
 
 function render() {
   const list = document.getElementById('list'); list.innerHTML = '';
-  DATA.notices.forEach(n => {
-    const show = state.cats.has(n.category) && state.srcs.has(n.source) &&
+  // истёкшие — в конце списка
+  [...NOTICES.filter(n => !n.expired), ...NOTICES.filter(n => n.expired)].forEach(n => {
+    const show = state.cats.has(n.category) && state.srcs.has(n.source) && (!n.expired || state.showExpired) &&
       (!state.q || (n.title + ' ' + n.text).toUpperCase().includes(state.q));
     const lg = layers[n.id];
     if (lg) show ? lg.addTo(map) : map.removeLayer(lg);
     if (!show) return;
-    const el = document.createElement('div'); el.className = 'item';
-    el.innerHTML = `<span class="sw" style="background:${catColor[n.category]}"></span> <b>${esc(n.id)}</b>` +
+    const el = document.createElement('div'); el.className = 'item' + (n.expired ? ' expired' : '');
+    el.innerHTML = `<span class="sw" style="background:${n.expired ? '#8a8f96' : catColor[n.category]}"></span> <b>${esc(n.id)}</b>` +
       `<div class="t">${esc(n.title.replace(/^ПРИП \S+ \d+\/\d+\s*/, ''))}</div>` +
-      (n.cancel ? `<div class="t">до ${fmt(n.cancel)} МСК</div>` : '') +
+      (n.expired ? `<div class="nogeo">срок истёк ${fmt(n.cancel)} МСК — не действует (ещё в списке mapm.ru)</div>`
+                 : n.cancel ? `<div class="t">до ${fmt(n.cancel)} МСК</div>` : '') +
       (n.cancelled_points && n.cancelled_points.length ? `<div class="t">пункт(ы) ${n.cancelled_points.join(', ')} отменены другим ПРИП — на карте не показаны</div>` : '') +
       (lg ? '' : '<div class="nogeo">без координат — только текст</div>');
     el.onclick = () => {

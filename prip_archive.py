@@ -211,7 +211,8 @@ def main():
     arch = load(arch_path)
     # отменённые ПРИП — раз в сутки (и при первом запуске): их списки большие, а меняются редко
     cancelled = fetch_cancelled(now, problems) if not arch["notices"] or now.hour == 4 else []
-    update(arch, r["notices"], cancelled, now)
+    # истёкшие по сроку «ОТМ ЭТОТ НР …» (mapm.ru ещё держит их в списке) — в архив как недействующие
+    update(arch, r["notices"], cancelled + r["expired"], now)
     compute_periods(arch, now)
     save(arch_path, arch)
     notices = build_page(arch, out_dir, now, problems)

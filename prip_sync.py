@@ -22,7 +22,7 @@ from tkinter import filedialog, messagebox, ttk
 import prip_update as pu
 
 APP = "ПРИП-Синхро"
-VERSION = "1.3"
+VERSION = "1.4"
 DATA = Path(os.environ.get("USERPROFILE", Path.home())) / "Documents" / "PRIP-Sync"
 STATE = DATA / "state.json"
 STALE_HOURS = 24
@@ -194,7 +194,11 @@ class App(tk.Tk):
             return None
 
     def _diff_and_fill(self):
-        notices = self.result["notices"]
+        # срок «ОТМ ЭТОТ НР …» проверяется на текущий момент: без связи на судне сохранённые данные стареют,
+        # а mapm.ru и сам убирает такие ПРИП из списка действующих с опозданием
+        now = dt.datetime.now(pu.MSK)
+        notices = [n for n in self.result["notices"] if not pu.is_expired(n, now)]
+        self.expired = [n for n in self.result["notices"] + self.result.get("expired", []) if pu.is_expired(n, now)]
         current = [n["id"] for n in notices]
         baseline = self.state_.get("baseline")
         if baseline is None:                     # первый запуск: в TimeZero ещё ничего нет
@@ -202,7 +206,7 @@ class App(tk.Tk):
         else:
             self.new_ids = [i for i in current if i not in baseline]
             self.gone_ids = [i for i in baseline if i not in current]
-        self._write_new_gpx()
+        self._write_gpx(set(current))
 
         self.ack_btn.config(text="Замена в TimeZero выполнена ✓" if self.full else "Изменения внесены в TimeZero ✓")
         if baseline is None:
@@ -227,6 +231,9 @@ class App(tk.Tk):
                 parts.append(f"ОТМЕНЕНЫ ({len(self.gone_ids)}) — удалите в TimeZero объекты с именами: "
                              f"{', '.join(pu.tz_name(i) for i in self.gone_ids)}")
             msg = "\n".join(parts)
+        if self.expired:
+            msg += ("\n⏱ Срок истёк, но ещё в списке mapm.ru — не действуют, в файлы для TimeZero не входят: "
+                    + ", ".join(f"{pu.tz_name(n['id'])} (до {fmt(n['cancel'])})" for n in self.expired))
         for p in self.result.get("problems", []):
             msg += f"\n⚠ {p}"
         self.changes.config(text=msg, wraplength=self.winfo_width() - 30)
@@ -237,24 +244,28 @@ class App(tk.Tk):
             self.tree.insert("", "end", iid=n["id"], tags=("new",) if n["id"] in self.new_ids else (),
                              values=(n["id"], title, fmt(n["cancel"]) if n.get("cancel") else "",
                                      n.get("features", 0) or "текст"))
+        expired_ids = {n["id"] for n in self.expired}
         for gid in self.gone_ids:
-            note = ("ОТМЕНЁН — исчезнет из TimeZero после полной замены" if self.full
-                    else f"ОТМЕНЁН — удалить в TimeZero объекты «{pu.tz_name(gid)}…»")
+            what = "СРОК ИСТЁК" if gid in expired_ids else "ОТМЕНЁН"
+            note = (f"{what} — исчезнет из TimeZero после полной замены" if self.full
+                    else f"{what} — удалить в TimeZero объекты «{pu.tz_name(gid)}…»")
             self.tree.insert("", "end", iid=gid, tags=("gone",), values=(gid, note, "", ""))
 
-    def _write_new_gpx(self):
+    def _write_gpx(self, active_ids):
+        """Полный файл и файл новых ПРИП — только из действующих на текущий момент."""
         feats = self.result.get("features")
         if feats is None:                        # данные из кэша: берём геометрию из geojson
             try:
                 feats = json.loads((DATA / "prip.geojson").read_text(encoding="utf-8"))["features"]
             except (OSError, ValueError):
                 return
+        pu.write_gpx_timezero([f for f in feats if f["properties"]["id"] in active_ids], DATA / "prip_timezero.gpx")
         pu.write_gpx_timezero([f for f in feats if f["properties"]["id"] in self.new_ids],
                               DATA / "prip_timezero_new.gpx")
 
     def _show_text(self, _):
         sel = self.tree.selection()
-        n = next((n for n in self.result["notices"] if sel and n["id"] == sel[0]), None)
+        n = next((n for n in self.result["notices"] + self.result.get("expired", []) if sel and n["id"] == sel[0]), None)
         self.text.delete("1.0", "end")
         self.text.insert("1.0", n["text"] if n else "Этот ПРИП больше не действует — удалите его объекты в TimeZero.")
 
