@@ -254,6 +254,7 @@ document.getElementById('rows').onclick = e => {
     </div></td></tr>`);
   if (!n.geo.length) return;
   mini = L.map('mini', {attributionControl:true});
+  mini.attributionControl.setPrefix(false);
   const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',
     {maxZoom:18, maxNativeZoom:10, attribution:'© Esri, GEBCO, NOAA'}).addTo(mini);   // крупнее 10 — «no data»
   let loaded = false;
